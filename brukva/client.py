@@ -10,10 +10,20 @@ from datetime import datetime
 from brukva.exceptions import RedisError, ConnectionError, ResponseError, InvalidResponse
 
 class Message(object):
-    def __init__(self, kind, channel, body):
-        self.kind = kind
-        self.channel = channel
-        self.body = body
+    ''' Wrapper Message object.
+            kind = command
+            channel = channel from which the message was received
+            pattern = subscription pattern
+            body = message body
+    '''
+    def __init__(self, *args):
+        if len(args) == 3:
+            (self.kind, self.channel, self.body) = args
+            self.pattern = self.channel
+        elif len(args) == 4:
+            (self.kind, self.channel, self.pattern, self.body) = args
+        else:
+            raise ValueError('Invalid number of arguments')
 
 class CmdLine(object):
     def __init__(self, cmd, *args, **kwargs):
@@ -183,7 +193,7 @@ class Client(object):
                                     reply_dict_from_pairs),
                 string_keys_to_dict('HGET',
                                     reply_str),
-                string_keys_to_dict('SUBSCRIBE UNSUBSCRIBE LISTEN',
+                string_keys_to_dict('SUBSCRIBE PSUBSCRIBE UNSUBSCRIBE PUNSUBSCRIBE LISTEN',
                                     reply_pubsub_message),
                 string_keys_to_dict('ZRANK ZREVRANK',
                                     reply_int),
@@ -680,11 +690,17 @@ class Client(object):
 
     ### PUBSUB
     def subscribe(self, channels, callbacks=None):
+        self._subscribe('SUBSCRIBE', channels, callbacks)
+
+    def psubscribe(self, channels, callbacks=None):
+        self._subscribe('PSUBSCRIBE', channels, callbacks)
+
+    def _subscribe(self, cmd, channels, callbacks=None):
         callbacks = callbacks or []
         if isinstance(channels, basestring):
             channels = [channels]
         callbacks = list(callbacks) + [self.on_subscribed]
-        self.execute_command('SUBSCRIBE', callbacks, *channels)
+        self.execute_command(cmd, callbacks, *channels)
 
     def on_subscribed(self, result):
         (e, _) = result
@@ -692,11 +708,17 @@ class Client(object):
             self.subscribed = True
 
     def unsubscribe(self, channels, callbacks=None):
+        self._unsubscribe('UNSUBSCRIBE', channels, callbacks)
+
+    def punsubscribe(self, channels, callbacks=None):
+        self._unsubscribe('PUNSUBSCRIBE', channels, callbacks)
+
+    def _unsubscribe(self, cmd, channels, callbacks=None):
         callbacks = callbacks or []
         if isinstance(channels, basestring):
             channels = [channels]
         callbacks = list(callbacks) + [self.on_unsubscribed]
-        self.execute_command('UNSUBSCRIBE', callbacks, *channels)
+        self.execute_command(cmd, callbacks, *channels)
 
     def on_unsubscribed(self, result):
         (e, _) = result
